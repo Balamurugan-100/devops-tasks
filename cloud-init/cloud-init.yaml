@@ -1,0 +1,197 @@
+#cloud-config
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - ffmpeg
+  - build-essential
+  - ripgrep
+  - fd-find
+  - unzip
+
+users:
+  - default
+  - name: testpress
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+
+write_files:
+  - path: /opt/testpress/app.env
+    owner: root:root
+    permissions: '0644'
+    content: |
+      HOST_PORT=8080
+
+      GREETING=Hello from Testpress!
+      APP_ENV=lab
+
+  - path: /opt/testpress/app.py
+    owner: root:root
+    permissions: '0644'
+    content: |
+      """Minimal HTTP app for the cloud-init exercise."""
+      import os
+      from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+      GREETING = os.environ.get("GREETING", "Hello from Testpress!")
+      PORT = int(os.environ.get("APP_PORT", "8080"))
+
+      class Handler(BaseHTTPRequestHandler):
+          def _reply(self, body: bytes) -> None:
+              self.send_response(200)
+              self.send_header("Content-Type", "text/plain; charset=utf-8")
+              self.send_header("Content-Length", str(len(body)))
+              self.end_headers()
+              self.wfile.write(body)
+
+          def do_GET(self) -> None:
+              if self.path == "/healthz":
+                  self._reply(b"ok\n")
+              else:
+                  self._reply(f"{GREETING}\n".encode())
+
+          def log_message(self, fmt: str, *args) -> None:
+              print("%s - %s" % (self.address_string(), fmt % args), flush=True)
+
+      if __name__ == "__main__":
+          print(f"listening on 0.0.0.0:{PORT}", flush=True)
+          ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+
+  - path: /opt/testpress/Dockerfile
+    owner: root:root
+    permissions: '0644'
+    content: |
+      FROM python:3.12-alpine
+
+      WORKDIR /app
+      COPY app.py /app/app.py
+
+      EXPOSE 8080
+
+      HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+        CMD python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz').status == 200 else 1)"
+
+      CMD ["python3", "/app/app.py"]
+
+  - path: /opt/testpress/compose.yaml
+    owner: root:root
+    permissions: '0644'
+    content: |
+      name: testpress-lab
+
+      services:
+        app:
+          build: .
+          image: testpress-app:local
+          restart: unless-stopped
+          env_file:
+            - /opt/testpress/app.env
+          ports:
+            - "${HOST_PORT:-8080}:8080"
+          healthcheck:
+            test:
+              - CMD
+              - python3
+              - -c
+              - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz').status == 200 else 1)"
+            interval: 10s
+            timeout: 3s
+            retries: 3
+            start_period: 5s
+          logging:
+            driver: json-file
+            options:
+              max-size: "10m"
+              max-file: "3"
+
+  - path: /etc/systemd/system/testpress-app.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Testpress Docker app (compose stack)
+      Requires=docker.service
+      Wants=network-online.target
+      After=network-online.target docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/testpress
+      ExecStart=/usr/bin/docker compose --env-file /opt/testpress/app.env up -d --build --wait --wait-timeout 180
+      ExecReload=/usr/bin/docker compose --env-file /opt/testpress/app.env up -d --build --wait --wait-timeout 180
+      ExecStop=/usr/bin/docker compose --env-file /opt/testpress/app.env down
+      TimeoutStartSec=0
+      TimeoutStopSec=90
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - |
+    set -e
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    . /etc/os-release
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl enable --now docker
+
+  - usermod -aG docker testpress
+
+  - |
+    if [ -s /home/ubuntu/.ssh/authorized_keys ]; then
+      install -d -m 0700 -o testpress -g testpress /home/testpress/.ssh
+      install -m 0600 -o testpress -g testpress \
+        /home/ubuntu/.ssh/authorized_keys /home/testpress/.ssh/authorized_keys
+    fi
+
+  - chown -R testpress:testpress /opt/testpress
+
+  - |
+    set -e
+    NVIM_VERSION=v0.12.6
+    case "$(dpkg --print-architecture)" in
+      amd64) NVIM_ARCH=x86_64 ;;
+      arm64) NVIM_ARCH=arm64 ;;
+      *) echo "unsupported architecture"; exit 1 ;;
+    esac
+    NVIM_ROOT=/opt/nvim-linux-${NVIM_ARCH}
+    if [ ! -x "${NVIM_ROOT}/bin/nvim" ]; then
+      curl -fsSL -o /tmp/nvim.tar.gz \
+        "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-${NVIM_ARCH}.tar.gz"
+      tar -xzf /tmp/nvim.tar.gz -C /opt
+      rm -f /tmp/nvim.tar.gz
+    fi
+    ln -sf "${NVIM_ROOT}/bin/nvim" /usr/local/bin/nvim
+    if [ -x /usr/bin/fdfind ] && [ ! -e /usr/local/bin/fd ]; then
+      ln -s /usr/bin/fdfind /usr/local/bin/fd
+    fi
+    nvim --version | head -1
+
+  - |
+    set -e
+    NVIM_DIR=/home/testpress/.config/nvim
+    if [ ! -d "${NVIM_DIR}" ]; then
+      install -d -m 0755 -o testpress -g testpress /home/testpress/.config
+      sudo -u testpress -H git clone --depth 1 https://github.com/LazyVim/starter "${NVIM_DIR}"
+      rm -rf "${NVIM_DIR}/.git"
+    fi
+    if [ ! -d /home/testpress/.local/share/nvim/lazy ]; then
+      sudo -u testpress -H timeout 600 nvim --headless "+Lazy! sync" +qa \
+        || echo "WARNING: LazyVim plugin sync did not finish; run :Lazy sync in nvim"
+    fi
+    chown -R testpress:testpress /home/testpress/.config /home/testpress/.local
+
+  - systemctl daemon-reload
+  - systemctl enable --now testpress-app.service

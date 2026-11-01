@@ -1,0 +1,47 @@
+# --- Version control and repo metadata --------------------------------------
+**/.git
+.gitignore
+.gitattributes
+.dockerignore
+
+# --- Documentation and task assets not needed in an image -------------------
+**/*.md
+cloud-init/
+
+# --- OS / editor state --------------------------------------------------------
+**/.DS_Store
+**/._*
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+**/*~
+
+# --- Secrets and local environment ------------------------------------------
+**/.env
+**/.env.*
+**/*.env
+!**/.env.example
+!**/*.env.example
+**/rclone.conf
+**/*.pem
+**/*.key
+
+# --- Logs, caches, and generated transfer data -------------------------------
+**/*.log
+**/logs/
+rclone/**/*.bin
+rclone/source/
+rclone/dest/
+rclone/data/
+rclone/cache/
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+
+# --- CI and VM scratch --------------------------------------------------------
+.github/
+**/*.qcow2
+**/*.img
+**/.vagrant/
