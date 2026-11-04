@@ -1,0 +1,26 @@
+[Unit]
+
+Description=My Python HTTP Server
+After=network.target
+StartLimitIntervalSec=15s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=bala
+WorkingDirectory=/home/bala/workspace/tasks/devops-tasks/process_and_systemd
+
+ExecStart= /home/bala/.local/share/mise/installs/python/3.11/bin/python /home/bala/workspace/tasks/devops-tasks/process_and_systemd/app.py
+Restart=always
+RestartSec=1
+
+
+MemoryHigh=100M
+MemoryMax=150M
+MemorySwapMax=0
+
+CPUQuota=5%
+
+
+[Install]
+WantedBy=multi-user.target

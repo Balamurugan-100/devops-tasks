@@ -1,6 +1,6 @@
 # Testpress Engineering Labs
 
-This repository contains two hands-on infrastructure automation and data transfer labs:
+This repository contains three hands-on labs covering infrastructure automation, data transfer, and Linux process management:
 
 ## 1. Automated Server Provisioning (`cloud-init/`)
 Automates complete Linux server setup (Ubuntu 24.04) from first boot using `cloud-init` without manual SSH intervention.
@@ -15,6 +15,13 @@ Builds a reproducible, configuration-free file transfer workflow across local st
 * Explores `copy` vs `move` vs `sync`, bandwidth throttling (`--bwlimit`), and multipart upload resilience.
 * Includes a reusable automation script (`transfer.sh`).
 * **[Setup & lab notes](./rclone/README.md)** | **[Commands cheat sheet](./rclone/commands.md)** | **[Observations & answers](./rclone/results.md)**
+
+## 3. Linux Process Management & systemd (`process_and_systemd/`)
+Explores Linux signals and service management using a Python HTTP application.
+* Logs a heartbeat every five seconds and handles graceful shutdown.
+* Tests automatic restarts, repeated failures, journald diagnostics, and memory limits.
+* Records experiment screenshots and lessons learnt.
+* **[Setup guide](./process_and_systemd/README.md)** | **[Experiments & learning notes](./process_and_systemd/experiments.md)** | **[Evidence](./process_and_systemd/evidence/)**
 
 ---
 
@@ -32,6 +39,13 @@ Builds a reproducible, configuration-free file transfer workflow across local st
 │   ├── README.md            # Rclone setup & reproduction guide
 │   ├── commands.md          # Reference of executed rclone commands
 │   └── results.md           # Test findings & answers to evaluation questions
+│
+├── process_and_systemd/
+│   ├── app.py               # Python HTTP service with a heartbeat
+│   ├── testpress.service    # systemd unit and resource limits
+│   ├── README.md            # Setup and service commands
+│   ├── experiments.md       # Learning notes and experiment results
+│   └── evidence/            # Execution screenshots
 │
 └── README.md                # Project index
 ```
